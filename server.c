@@ -686,7 +686,6 @@ int main(int argc, char const* argv[])
                 // printf("INCOMING SEQUENCE NUMBER %u, INCOMING LEN %u, added we get %u\n", ntohl(tcp_hdr->seq), ntohl(ip->len), ntohl(tcp_hdr->seq) + ntohl(ip->len));
 
                 tcp->ack = htonl(ntohl(tcp_hdr->seq) + 1);
-            
                 tcp->flags = TH_SYN | TH_ACK;
 
                 // 6000 in mongoose
@@ -704,25 +703,13 @@ int main(int argc, char const* argv[])
                 uint16_t n = (uint16_t) (sizeof(*tcp) + len);
                 uint8_t pseudo[] = {0, proto, (uint8_t) (n >> 8), (uint8_t) (n & 255)};
 
-                // printf("Cs is %d (%x)\n", cs, cs);
                 cs = csumup(cs, tcp, n);
-                // printf("Cs is %d (%x)\n", cs, cs);
-
                 uint32_t srcIp = inet_addr("127.0.0.1");
-                // printf("Src ip is %x\n", srcIp);
-
                 uint32_t dstIp = inet_addr("127.0.0.1");
-                // printf("Dest ip is %x\n", dstIp);
 
                 cs = csumup(cs, &srcIp, sizeof(srcIp));
-                // printf("Cs is %d (%x)\n", cs, cs);
-
                 cs = csumup(cs, &dstIp, sizeof(dstIp));
-                // printf("Cs is %d (%x)\n", cs, cs);
-
                 cs = csumup(cs, pseudo, sizeof(pseudo));
-                // printf("Cs is %d (%x)\n", cs, cs);
-
                 tcp->csum = csumfin(cs);
                 // printf("Cs is %d (%x)\n", cs, cs);
                 // printf("CHECKSUM IS %x\n", tcp->csum);
@@ -749,14 +736,11 @@ int main(int argc, char const* argv[])
              
         } else if (tcp_state == SYN_RECEIVED) {
             printf("ENTERED SYN-RECEIVED\n");
-            sleep(1);
 
             if ((msglen = recvfrom(raw_socket, msg, 65536 , 0 , NULL, NULL)) < 0) {
                 perror("recv");
                 retval = 1;
-                // goto _go_close_socket;
             }
-
 
             ip_hdr = msg;
             tcp_hdr = msg + sizeof(struct ip);
@@ -773,17 +757,14 @@ int main(int argc, char const* argv[])
                 tcp_state = ESTABLISHED;
             }
 
-
             // wait for an ack, when we receive it then transfer to tcp state established
             // in tcp state established we're basically gonna check if what's coming in is a get or not
-
-            
         } else if (tcp_state == ESTABLISHED) {
 
             char incoming_http_req[MSG_SIZE];
             if ((msglen = recvfrom(raw_socket, incoming_http_req, 65536 , 0 , NULL, NULL)) < 0) {
                 perror("recv");
-                // exit(1);
+                exit(1);
             }
 
             struct ip *ip =  (struct ip*) incoming_http_req;
@@ -791,88 +772,24 @@ int main(int argc, char const* argv[])
 
             if (ntohs(tcp->dport) == SERVER_PORT) {
                 char* payload = incoming_http_req + (sizeof(struct ip) + sizeof(struct tcp));
-                payload[100] = '\0';
 
-                if (payload[0] == 'G' && payload[1] == 'E' && payload[2] == 'T') {
+                    if (payload[0] == 'G' && payload[1] == 'E' && payload[2] == 'T') {
+                        printf("RECEIVED GET REQUEST\n");
+                        payload[100] = '\0';
+                        printf("GET payload is %s\n", payload);
 
-
-                    // printf("RECEIVED A NEW REQUEST AFTER RECEIVING AN ACK, dest port %d, seqnum %u\n", ntohs(tcp->dport), ntohl(tcp->seq));
-                    // printf("THE RAW DATA IS: \n");
-                    // printf("Source ip is %d\n", ntohs(ip->src));
-                    // printf("Dest ip is %d\n", ntohs(ip->dst));
-                    // printf("Source port is %d\n", ntohs(tcp->sport));
-                    // printf("Dest port is %d\n", ntohs(tcp->dport));
-                    printf("RECEIVED GET REQUEST\n");
-                    printf("Payload is %s\n", payload);
-
-                    printf("SENDING SAME PACKET AGAIN, CHECKSUM SHOULD BE GOOD!!!\n");
-                    genpacket(tcp, raw_socket, html_response_buf, html_response_buf_len);
-
-                    // printf("SENDING Same Packet AGAIN to figure out why the checksum is incorrect: \n");
-                    // for (int i = 0; i < sizeof(struct tcp) + html_response_buf_len; ++i) {
-                    //     print_byte_in_binary(response[i]);
-
-                    //     if (i % 8 == 0) {
-                    //         printf("\n");
-                    //     }
-                    // }                
-
-                    // printf("Before the sendto!\n");
-                    // if(sendto(raw_socket, response, sizeof(struct tcp) + html_response_buf_len, 0, (struct sockaddr *)&dest, sizeof(dest)) < 0) {
-                    //     perror("sendto() error");
-                    //     exit(-1);
-                    // } else 
-                    //     printf("sendto ok");
-
-                }
-
-                    // printf("Printing payload binary: \n");
-                    // int payload_len = MSG_SIZE - (sizeof(struct tcp) + sizeof(struct ip));
-                    // for (int i = (sizeof(struct tcp) + sizeof(struct ip)); i < payload_len; ++i) {
-                    //     print_byte_in_binary(payload[i]);
-
-                    //     if ((i + 15) % 8 == 0) {
-                    //         printf("\n (i == %x) ", (i + 15));
-                    //     }
-                    // }
-
-                    // printf("\n\nNow printing the entire buffer in binary:\n ");
-                    
-
-                    // ok, so I starts at the 15th byte where i = 14. When i = 15, 
-                    // we want to print a newline. 
-
-                    // our i is actually zero where i is supposed to be 14. So say we 
-                    // add 14 to it. Then once I gets to be 15, we won't actually print a newline.
-
-                    // another way to view it is we want to print a newline when i = 1,
-                    // when i = 9, when i = 17, etc.
-
-                    // so technically if i - 1 % 8 == 0 
-
-
-                    // and what about the numbering? well we want the first number to be 
-                    // 0010 which is 16 hex. At this point i will be equal to 0. So add 16 and print it.
-
-                    // for (int i = 0; i < MSG_SIZE; ++i) {
-                    //     print_byte_in_binary(incoming_http_req[i]);
-                    //     // printf("")
-                    //     if ((i - 1) % 8 == 0) {
-                    //         printf("\n (i == %x) ", (i + 15));
-                    //     }
-
-                    //     // bro, what. am i retarded. what's going on here. 
-                    // }
-
-                    // printf("Payload is %s\n", payload);
-                    
-                }
+                        printf("SENDING SAME PACKET AGAIN, CHECKSUM SHOULD BE GOOD!!!\n");
+                        genpacket(tcp, raw_socket, html_response_buf, html_response_buf_len);
+                    }
+            }
             
 
             printf("ENTERED ESTABLISHED\n");
-            sleep(1);
             fflush(stdout);
 
+            // temporary hack to keep accepting requests
+            // tcp_state = LISTEN;
+            // continue;
             
 
         } else {
