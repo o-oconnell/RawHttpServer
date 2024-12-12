@@ -180,24 +180,17 @@ void standardServer(char* html_response_buf) {
     bind(servSockD, (struct sockaddr*)&servAddr, 
 		sizeof(servAddr)); 
 
-	// listen for connections 
 	listen(servSockD, 1); 
 
 
     int new_socket;
     while (1) {
         printf("Waiting for new connection...\n");
-        // if ((new_socket = accept(servSockD, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
         if (new_socket = accept(servSockD, NULL, NULL)) {
-            // perror("accept");
-            // exit(EXIT_FAILURE);
-            // Send message to the newly connected client
 
-            // using strlen instead of sizeof here gets rid of the garbage at the end of the response
             send(new_socket, html_response_buf, strlen(html_response_buf), 0);
             // printf("Hello message sent\n");
 
-            // Close the connection
             // close(new_socket);
         }
     }
