@@ -548,8 +548,6 @@ int main(int argc, char const* argv[])
         printf("BytesRead is %d\n", bytesRead);
         printf("Sizeof serMsg is %lu\n", sizeof(serMsg));
         serMsg[bytesRead] = '\0'; 
-      
-        // printf("%s", serMsg);
     }
 
     fclose(fptr); 
@@ -595,8 +593,8 @@ int main(int argc, char const* argv[])
         return;
     }
 
-    struct ip* ip_hdr; // = msg;
-    struct tcp* tcp_hdr; //  = msg + sizeof(struct ip);
+    struct ip* ip_hdr; 
+    struct tcp* tcp_hdr; 
     char msg[MSG_SIZE];
 
     enum server_tcp_state tcp_state = LISTEN;
@@ -619,39 +617,13 @@ int main(int argc, char const* argv[])
             if ((tcp_hdr->flags & TH_SYN) && ntohs(tcp_hdr->dport) == SERVER_PORT) {
                 // send back a syn-ack, transfer to syn-received state.
                 printf("Received a SYN!\n");
+                char responseBuffer[PCKT_LEN];
 
-                            // if (tcp_hdr->flags & TH_ACK) {
-            //     printf("Received an ACK!\n");
-            // }
+                // struct ip *ip = (struct ip *) responseBuffer;
+                struct tcp *tcp = (struct tcp *) (responseBuffer);
+                struct sockaddr_in sin, din;
 
-            char responseBuffer[PCKT_LEN];
-
-            // The size of the headers
-
-            // struct ip *ip = (struct ip *) responseBuffer;
-            struct tcp *tcp = (struct tcp *) (responseBuffer);
-            struct sockaddr_in sin, din;
-
-            // int one = 1;
-            // const int *val = &one;
-
-            memset(responseBuffer, 0, PCKT_LEN);
-
-            // // IP structure
-            // ip->ver = 0x45;               // Version 4, header length 5 words
-            // ip->frag = htons(0x4000);  // Don't fragment
-            // printf("Sizeof struct tcp is %ld\n", sizeof(struct tcp));
-            // // printf("Sizeof struct tcp converted to a uint16 is ", ((uint16_t)))
-            
-            // ip->len = htons((uint16_t) (sizeof(struct tcp)));
-            // ip->ttl = 64;
-            // ip->proto = 6;
-            // ip->src = inet_addr("127.0.0.1");
-            // ip->dst = inet_addr("127.0.0.1");
-            // printf("Source IP %u\n", ntohl(ip->src));
-            // printf("Dest IP %u\n", ntohl(ip->dst));
-
-            // ip->csum = csum((unsigned short *) responseBuffer, (sizeof(struct ip) + sizeof(struct tcp)));
+                memset(responseBuffer, 0, PCKT_LEN);
 
                 uint16_t server_port =  SERVER_PORT;
                 printf("Server port is %x\n", server_port);
@@ -660,31 +632,12 @@ int main(int argc, char const* argv[])
                 tcp->sport = htons(server_port);
                 printf("Sport hex: %x\n", tcp->sport);
 
-
                 tcp->dport = tcp_hdr->sport;
                 printf("Dport hex: %x\n", tcp->dport);
 
+                // https://community.infosecinstitute.com/discussion/73516/calculating-seq-ack-number
                 uint32_t isn = htonl((uint32_t) ntohs(tcp_hdr->sport));
-
-                tcp->seq = isn; // this can just be a random value so should
-
-                printf("Setting the sequence number for the synACK to %u\n", (tcp->seq));
-
-                // be fine to just copy the incoming seq number right.? https://community.infosecinstitute.com/discussion/73516/calculating-seq-ack-number
-
-                // uint32_t cs = 0;
-                // size_t len = 0;
-                // uint16_t n = (uint16_t) (sizeof(*tcp) + len);
-                // uint8_t pseudo[] = {0, ip->proto, (uint8_t) (n >> 8), (uint8_t) (n & 255)};
-                // cs = csumup(cs, tcp, n);
-                // cs = csumup(cs, &ip->src, sizeof(ip->src));
-                // cs = csumup(cs, &ip->dst, sizeof(ip->dst));
-                // cs = csumup(cs, pseudo, sizeof(pseudo));
-
-
-                // tcp->csum = 0; // csumfin(cs);
-                // printf("INCOMING SEQUENCE NUMBER %u, INCOMING LEN %u, added we get %u\n", ntohl(tcp_hdr->seq), ntohl(ip->len), ntohl(tcp_hdr->seq) + ntohl(ip->len));
-
+                tcp->seq = isn; 
                 tcp->ack = htonl(ntohl(tcp_hdr->seq) + 1);
                 tcp->flags = TH_SYN | TH_ACK;
 
@@ -711,20 +664,14 @@ int main(int argc, char const* argv[])
                 cs = csumup(cs, &dstIp, sizeof(dstIp));
                 cs = csumup(cs, pseudo, sizeof(pseudo));
                 tcp->csum = csumfin(cs);
-                // printf("Cs is %d (%x)\n", cs, cs);
-                // printf("CHECKSUM IS %x\n", tcp->csum);
+
 
                 if(sendto(raw_socket, responseBuffer, sizeof(responseBuffer), 0, (struct sockaddr *)&dest, sizeof(dest)) < 0) {
                     perror("sendto() error");
                     exit(-1);
                 } else 
                     printf("sendto ok");
-                // printf("SENDING THE SAME PACKET AGAIN TO SEE WHAT HAPPENS \n");
-                //     if(sendto(raw_socket, responseBuffer, sizeof(responseBuffer), 0, (struct sockaddr *)&dest, sizeof(dest)) < 0) {
-                //     perror("sendto() error");
-                //     exit(-1);
-                // } else 
-                //     printf("sendto ok");
+
 
                 fflush(stdout);
                 printf("WAITNG FOR AN ACK\n");
@@ -735,7 +682,7 @@ int main(int argc, char const* argv[])
 
              
         } else if (tcp_state == SYN_RECEIVED) {
-            printf("ENTERED SYN-RECEIVED\n");
+            printf("SYN-RECEIVED\n");
 
             if ((msglen = recvfrom(raw_socket, msg, 65536 , 0 , NULL, NULL)) < 0) {
                 perror("recv");
@@ -757,8 +704,6 @@ int main(int argc, char const* argv[])
                 tcp_state = ESTABLISHED;
             }
 
-            // wait for an ack, when we receive it then transfer to tcp state established
-            // in tcp state established we're basically gonna check if what's coming in is a get or not
         } else if (tcp_state == ESTABLISHED) {
 
             char incoming_http_req[MSG_SIZE];
@@ -782,499 +727,14 @@ int main(int argc, char const* argv[])
                         genpacket(tcp, raw_socket, html_response_buf, html_response_buf_len);
                     }
             }
-            
 
-            printf("ENTERED ESTABLISHED\n");
+            printf("ESTABLISHED\n");
             fflush(stdout);
-
-            // temporary hack to keep accepting requests
-            // tcp_state = LISTEN;
-            // continue;
-            
-
         } else {
             printf(stderr, "Unrecognized state \n");
             exit(1);
         }
-        continue;
-
-        if ((msglen = recvfrom(raw_socket, msg, 65536 , 0 , NULL, NULL))) {
-            perror("recv");
-            retval = 1;
-        }
-
-        ip_hdr = msg;
-        tcp_hdr = msg + sizeof(struct ip);
-
-        // printf("Source ip is %d\n", ntohs(ip_hdr->src));
-        // printf("Dest ip is %d\n", ntohs(ip_hdr->dst));
-        // printf("Source port is %d\n", ntohs(tcp_hdr->sport));
-        // printf("Dest port is %d\n", ntohs(tcp_hdr->dport));
-
-        if ((tcp_hdr->flags & TH_SYN) && ntohs(tcp_hdr->dport) == SERVER_PORT) {
-            printf("Received a SYN!\n");
-
-            // if (tcp_hdr->flags & TH_ACK) {
-            //     printf("Received an ACK!\n");
-            // }
-
-            char responseBuffer[PCKT_LEN];
-
-            // The size of the headers
-
-            // struct ip *ip = (struct ip *) responseBuffer;
-            struct tcp *tcp = (struct tcp *) (responseBuffer);
-            struct sockaddr_in sin, din;
-
-            // int one = 1;
-            // const int *val = &one;
-
-            memset(responseBuffer, 0, PCKT_LEN);
-
-            // // IP structure
-            // ip->ver = 0x45;               // Version 4, header length 5 words
-            // ip->frag = htons(0x4000);  // Don't fragment
-            // printf("Sizeof struct tcp is %ld\n", sizeof(struct tcp));
-            // // printf("Sizeof struct tcp converted to a uint16 is ", ((uint16_t)))
-            
-            // ip->len = htons((uint16_t) (sizeof(struct tcp)));
-            // ip->ttl = 64;
-            // ip->proto = 6;
-            // ip->src = inet_addr("127.0.0.1");
-            // ip->dst = inet_addr("127.0.0.1");
-            // printf("Source IP %u\n", ntohl(ip->src));
-            // printf("Dest IP %u\n", ntohl(ip->dst));
-
-            // ip->csum = csum((unsigned short *) responseBuffer, (sizeof(struct ip) + sizeof(struct tcp)));
-
-            uint16_t server_port =  SERVER_PORT;
-            printf("Server port is %x\n", server_port);
-            printf("Htons server port is %x\n", htons(server_port));
-
-            tcp->sport = htons(server_port);
-            printf("Sport hex: %x\n", tcp->sport);
-
-
-            tcp->dport = tcp_hdr->sport;
-            printf("Dport hex: %x\n", tcp->dport);
-
-            uint32_t isn = htonl((uint32_t) ntohs(tcp_hdr->sport));
-
-            tcp->seq = isn; // this can just be a random value so should
-
-            printf("Setting the sequence number for the synACK to %u\n", (tcp->seq));
-
-                // be fine to just copy the incoming seq number right.? https://community.infosecinstitute.com/discussion/73516/calculating-seq-ack-number
-
-                // uint32_t cs = 0;
-                // size_t len = 0;
-                // uint16_t n = (uint16_t) (sizeof(*tcp) + len);
-                // uint8_t pseudo[] = {0, ip->proto, (uint8_t) (n >> 8), (uint8_t) (n & 255)};
-                // cs = csumup(cs, tcp, n);
-                // cs = csumup(cs, &ip->src, sizeof(ip->src));
-                // cs = csumup(cs, &ip->dst, sizeof(ip->dst));
-                // cs = csumup(cs, pseudo, sizeof(pseudo));
-
-
-    // tcp->csum = 0; // csumfin(cs);
-
-                
-
-                // printf("INCOMING SEQUENCE NUMBER %u, INCOMING LEN %u, added we get %u\n", ntohl(tcp_hdr->seq), ntohl(ip->len), ntohl(tcp_hdr->seq) + ntohl(ip->len));
-    
-        tcp->ack = htonl(ntohl(tcp_hdr->seq) + 1);
-    
-        tcp->flags = TH_SYN | TH_ACK;
-
-        // 6000 in mongoose
-        tcp->win = htons(32767);
-        tcp->off = (uint8_t) (sizeof(*tcp) / 4 << 4); // data offset? 
-
-        struct sockaddr_in dest;
-        dest.sin_family = AF_INET;
-        dest.sin_addr.s_addr = inet_addr(ADDR_TO_BIND);
-        dest.sin_port = htons(SERVER_PORT);
-
-        size_t len = 0;
-        uint8_t proto = 6;
-        uint32_t cs = 0;
-        uint16_t n = (uint16_t) (sizeof(*tcp) + len);
-        uint8_t pseudo[] = {0, proto, (uint8_t) (n >> 8), (uint8_t) (n & 255)};
-
-        // printf("Cs is %d (%x)\n", cs, cs);
-        cs = csumup(cs, tcp, n);
-        // printf("Cs is %d (%x)\n", cs, cs);
-
-        uint32_t srcIp = inet_addr("127.0.0.1");
-        // printf("Src ip is %x\n", srcIp);
-
-        uint32_t dstIp = inet_addr("127.0.0.1");
-        // printf("Dest ip is %x\n", dstIp);
-
-
-        cs = csumup(cs, &srcIp, sizeof(srcIp));
-        // printf("Cs is %d (%x)\n", cs, cs);
-
-        cs = csumup(cs, &dstIp, sizeof(dstIp));
-        // printf("Cs is %d (%x)\n", cs, cs);
-
-        cs = csumup(cs, pseudo, sizeof(pseudo));
-        // printf("Cs is %d (%x)\n", cs, cs);
-
-        tcp->csum = csumfin(cs);
-        // printf("Cs is %d (%x)\n", cs, cs);
-        // printf("CHECKSUM IS %x\n", tcp->csum);
-
-        if(sendto(raw_socket, responseBuffer, sizeof(responseBuffer), 0, (struct sockaddr *)&dest, sizeof(dest)) < 0) {
-            perror("sendto() error");
-            exit(-1);
-        } else 
-            printf("sendto ok");
-
-
-    
-    // printf("SENDING THE SAME PACKET AGAIN TO SEE WHAT HAPPENS \n");
-    //     if(sendto(raw_socket, responseBuffer, sizeof(responseBuffer), 0, (struct sockaddr *)&dest, sizeof(dest)) < 0) {
-    //     perror("sendto() error");
-    //     exit(-1);
-    // } else 
-    //     printf("sendto ok");
-
-
-
-
-    fflush(stdout);
-
-    printf("WAITNG FOR AN ACK\n");
-    for (;;) {
-        if ((msglen = recvfrom(raw_socket, msg, 65536 , 0 , NULL, NULL)) < 0) {
-            perror("recv");
-            retval = 1;
-            // goto _go_close_socket;
-        }
-
-
-        ip_hdr = msg;
-        tcp_hdr = msg + sizeof(struct ip);
-
-
-        printf("Source ip is %d\n", ntohs(ip_hdr->src));
-        printf("Dest ip is %d\n", ntohs(ip_hdr->dst));
-        printf("Source port is %d\n", ntohs(tcp_hdr->sport));
-        printf("Dest port is %d\n", ntohs(tcp_hdr->dport));
-
-        if (tcp_hdr->flags & (TH_ACK)) {
-            printf("RECEIVED AN ACK\n");
-        
-            char* payload = msg + (sizeof(struct ip) + sizeof(struct tcp));
-            printf("ACK payload is %s\n", payload);
-
-            // receive http GET
-            for (;;) {
-
-                char incoming_http_req[MSG_SIZE];
-                if ((msglen = recvfrom(raw_socket, incoming_http_req, 65536 , 0 , NULL, NULL)) < 0) {
-                    perror("recv");
-                    retval = 1;
-                    // goto _go_close_socket;
-                }
-
-                struct ip *ip =  (struct ip*) incoming_http_req;
-                struct tcp *tcp = (struct tcp*) (incoming_http_req + sizeof(struct ip));
-
-                // for (int i = 0; i < MSG_SIZE; ++i) {
-                //     print_byte_in_binary(incoming_http_req[i]);
-                //     if (i % 7 == 0) {
-                //         printf("\n");
-                //     }
-                // }
-                // for ()
-                if (ntohs(tcp->dport) == 8080) {
-                    char* payload = incoming_http_req + (sizeof(struct ip) + sizeof(struct tcp));
-                    payload[100] = '\0';
-
-                    if (payload[0] == 'G' && payload[1] == 'E' && payload[2] == 'T') {
-
-
-                        // printf("RECEIVED A NEW REQUEST AFTER RECEIVING AN ACK, dest port %d, seqnum %u\n", ntohs(tcp->dport), ntohl(tcp->seq));
-
-                        // printf("THE RAW DATA IS: \n");
-                        // printf("Source ip is %d\n", ntohs(ip->src));
-                        // printf("Dest ip is %d\n", ntohs(ip->dst));
-                        // printf("Source port is %d\n", ntohs(tcp->sport));
-                        // printf("Dest port is %d\n", ntohs(tcp->dport));
-                        printf("RECEIVED GET REQUEST\n");
-                        printf("Payload is %s\n", payload);
-
-
-
-                        printf("SENDING SAME PACKET AGAIN, CHECKSUM SHOULD BE GOOD!!!\n");
-                        genpacket(tcp, raw_socket, html_response_buf, html_response_buf_len);
-
-                        // printf("SENDING Same Packet AGAIN to figure out why the checksum is incorrect: \n");
-                        // for (int i = 0; i < sizeof(struct tcp) + html_response_buf_len; ++i) {
-                        //     print_byte_in_binary(response[i]);
-
-                        //     if (i % 8 == 0) {
-                        //         printf("\n");
-                        //     }
-                        // }                
-
-                        // printf("Before the sendto!\n");
-                        // if(sendto(raw_socket, response, sizeof(struct tcp) + html_response_buf_len, 0, (struct sockaddr *)&dest, sizeof(dest)) < 0) {
-                        //     perror("sendto() error");
-                        //     exit(-1);
-                        // } else 
-                        //     printf("sendto ok");
-
-                        return;
-                    }
-
-                    // printf("Printing payload binary: \n");
-                    // int payload_len = MSG_SIZE - (sizeof(struct tcp) + sizeof(struct ip));
-                    // for (int i = (sizeof(struct tcp) + sizeof(struct ip)); i < payload_len; ++i) {
-                    //     print_byte_in_binary(payload[i]);
-
-                    //     if ((i + 15) % 8 == 0) {
-                    //         printf("\n (i == %x) ", (i + 15));
-                    //     }
-                    // }
-
-                    // printf("\n\nNow printing the entire buffer in binary:\n ");
-                    
-
-                    // ok, so I starts at the 15th byte where i = 14. When i = 15, 
-                    // we want to print a newline. 
-
-                    // our i is actually zero where i is supposed to be 14. So say we 
-                    // add 14 to it. Then once I gets to be 15, we won't actually print a newline.
-
-                    // another way to view it is we want to print a newline when i = 1,
-                    // when i = 9, when i = 17, etc.
-
-                    // so technically if i - 1 % 8 == 0 
-
-
-                    // and what about the numbering? well we want the first number to be 
-                    // 0010 which is 16 hex. At this point i will be equal to 0. So add 16 and print it.
-
-                    // for (int i = 0; i < MSG_SIZE; ++i) {
-                    //     print_byte_in_binary(incoming_http_req[i]);
-                    //     // printf("")
-                    //     if ((i - 1) % 8 == 0) {
-                    //         printf("\n (i == %x) ", (i + 15));
-                    //     }
-
-                    //     // bro, what. am i retarded. what's going on here. 
-                    // }
-
-                    // printf("Payload is %s\n", payload);
-                    
-                }
-            }
-
-        }
-        
     }
-
-  continue;
-
-
-    	// bind(servSockD, (struct sockaddr*)&servAddr, 
-	// 	sizeof(servAddr)); 
-
-	// listen for connections 
-    // if (listen(raw_socket, 1) == -1) {
-    //     perror("LISTEN");
-    //     retval = 1; /* '1' means "Error" */
-    //     return;
-    //     // goto _go_close_socket;
-    // }
-
-    memset(msg, 0, MSG_SIZE);
-    // listen(raw_socket, 1);
-
-
-
-        return; // ------------------------------------------------------
-
-
-
-
-                // char *responseBuffer = malloc(PCKT_LEN * sizeof(char));
-
-                // The size of the headers
-
-                // struct ip *ip = (struct ip *) responseBuffer;
-                // struct tcp *tcp = (struct tcp *) (responseBuffer);
-                // struct sockaddr_in sin, din;
-
-                // int one = 1;
-                // const int *val = &one;
-
-                // memset(responseBuffer, 0, PCKT_LEN);
-
-                // // IP structure
-                // ip->ver = 0x45;               // Version 4, header length 5 words
-                // ip->frag = htons(0x4000);  // Don't fragment
-                // printf("Sizeof struct tcp is %ld\n", sizeof(struct tcp));
-                // printf("Sizeof struct tcp converted to a uint16 is ", ((uint16_t)))
-                
-                // ip->len = htons((uint16_t) (sizeof(struct tcp)));
-                // ip->ttl = 64;
-                // ip->proto = 6;
-                // ip->src = ip_hdr->dst;
-                // ip->dst = ip_hdr->src;
-                // printf("Source IP %u\n", ntohl(ip->src));
-                // printf("Dest IP %u\n", ntohl(ip->dst));
-
-                // ip->csum = csum((unsigned short *) responseBuffer, (sizeof(struct ip) + sizeof(struct tcp)));
-
-
-                // tcp->sport = tcp_hdr->dport;
-                // tcp->dport = tcp_hdr->sport;
-                // tcp->seq = htonl( (uint32_t)ntohs(tcp_hdr->sport)); // this can just be a random value so should
-
-                // printf("Setting the sequence number for the synACK to %u\n", ((uint32_t)ntohs(tcp_hdr->sport)));
-
-                // be fine to just copy the incoming seq number right.? https://community.infosecinstitute.com/discussion/73516/calculating-seq-ack-number
-
-                // uint32_t cs = 0;
-                // size_t len = 0;
-                // uint16_t n = (uint16_t) (sizeof(*tcp) + len);
-                // uint8_t pseudo[] = {0, ip->proto, (uint8_t) (n >> 8), (uint8_t) (n & 255)};
-                // cs = csumup(cs, tcp, n);
-                // cs = csumup(cs, &ip->src, sizeof(ip->src));
-                // cs = csumup(cs, &ip->dst, sizeof(ip->dst));
-                // cs = csumup(cs, pseudo, sizeof(pseudo));
-                // tcp->csum = 0; //csumfin(cs);
-
-                
-                // printf("INCOMING SEQUENCE NUMBER %u, INCOMING LEN %u, added we get %u\n", ntohl(tcp_hdr->seq), ntohl(ip->len), ntohl(tcp_hdr->seq) + ntohl(ip->len));
-                // tcp->ack = htonl(ntohl(tcp_hdr->seq) + 1);
-                
-                // printf("SETTING ACK %u\n", ntohl(tcp->ack));
-                // tcp->flags = TH_SYN | TH_ACK;
-
-                // // 6000 in mongoose
-                // tcp->win = htons(32767);
-                // tcp->off = (uint8_t) (sizeof(*tcp) / 4 << 4); // data offset? 
-                // ^pretty sure this is the header length. Yes, it's 8 bits and comes directly 
-                // prior to the flags
-
-                // int sd = socket(PF_INET, SOCK_RAW, IPPROTO_TCP);
-
-                // if(sd < 0)
-                // {
-                //     perror("socket() error");
-                //     exit(-1);
-                // } else
-                //     printf("socket()-SOCK_RAW and tcp protocol is OK.\n");
-
-                // // The source is redundant, may be used later if needed
-                // // // Address familysendto
-                // sin.sin_family = AF_INET;
-                // // // din.sin_family = AF_INET;
-
-                // // // Source port, can be any, modify as needed
-
-                // sin.sin_port = tcp_hdr->dport;
-                // // din.sin_port = htons(SERVER_PORT);
-
-                // // Source IP, can be any, modify as needed
-                // char *dstIp = "127.0.0.1";
-                // // char *dstIp = "127.0.0.1";
-
-                // char srcPort[100];
-                // sprintf(srcPort, "%d", tcp_hdr->dport);
-                // char *srcPort = itoa(ntohs(tcp_hdr->dport));
-                // sin.sin_addr.s_addr =  inet_addr(ADDR_TO_BIND);
-                // din.sin_addr.s_addr = inet_addr(dstIp);
-
-    // printf("SIN sin_family %u, sin_port_t %u, sin_addr %u, socklen %u\n ", sin.sin_family, sin.sin_port, sin.sin_addr.s_addr, sizeof(sockstr));
-
-
-
-// UNCOMMENT ME TO GET SD BACK
-                // if (setsockopt(sd, IPPROTO_IP, IP_HDRINCL, val, sizeof(one)) < 0)
-                // {
-                //     perror("setsockopt() error");
-                //     exit(-1);
-                // } else
-                //     printf("setsockopt() is OK\n");
-
-                // printf("Using:::::Source IP: %s port: %u, Target IP: %s port: %u.\n", srcIp, atoi(srcPort), dstIp, atoi(dstPort));
-
-                
-                // for (int i = 0; i < sizeof(struct ip) + sizeof(struct tcpheader); ++i) {
-                //     printf("Raw buffer chraw_socketar is %d\n", (int)rawBuffer[i]);
-                // }
-
-                // unsigned int count;
-                // // printf("Before the SENDTO! Response buffer size is %lu, ip->len is %hu\n", sizeof(responseBuffer), ntohs(ip->len));
-                // fflush(stdout);
-
-                // SIN is destination address
-                    // sin.sin_family = AF_INET;
-    // din.sin_family = AF_INET;
-
-    // Source port, can be any, modify as needed
-    // sin.sin_port = htons(atoi("55555"));
-    // din.sin_port = htons(atoi(sprintf("%s", SERVER_PORT)));
-
-    // // Source IP, can be any, modify as needed
-    // char *srcIp = "127.0.0.1";
-    // char *dstIp = "127.0.0.1";
-    
-    // char *srcPort = "55555";
-    // sin.sin_addr.s_addr = inet_addr(srcIp);
-    // din.sin_addr.s_addr = inet_addr(dstIp);
-
-                printf("AFTER THE SENDTO!");
-                fflush(stdout);
-                // sleep(2);
-        
-
-
-            printf("Msglen is %d\n", msglen);
-
-            if (msglen <= HEADER_SIZE) /* msg  can't be lesser than header! */
-                printf("No msg!\n");
-            else {
-                msg[msglen - 1] = '\0'; /* we need a null character at the end*/
-                printf("Your msg _plus_ headers's size is: %s\n",
-                    msg + HEADER_SIZE);
-            }
-
-
-            printf("WAITNG FOR AN ACK\n");
-            for (;;) {
-                if ((msglen = recvfrom(raw_socket, msg, 65536 , 0 , NULL, NULL)) < 0) {
-                    perror("recv");
-                    retval = 1;
-                    // goto _go_close_socket;
-                }
-
-                // struct ip* ip_hdr = msg;
-                // struct tcp* tcp_hdr = msg + sizeof(struct ip);
-
-                // if ((tcp_hdr->flags & TH_ACK ) && ntohs(tcp_hdr->dport) == SERVER_PORT) {
-                //     printf("RECEIVED AN ACK\n");
-                //     printf("Source ip is %d\n", ntohs(ip_hdr->src));
-                //     printf("Dest ip is %d\n", ntohs(ip_hdr->dst));
-                //     printf("Source port is %d\n", ntohs(tcp_hdr->sport));
-                //     printf("Dest port is %d\n", ntohs(tcp_hdr->dport));
-                //     break;
-                // }
-            }
-
-
-            break;
-        }
-
-    }
-
-    return retval;
 
 	return 0; 
 }
