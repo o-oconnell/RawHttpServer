@@ -2,7 +2,7 @@
 
 This is a [raw socket HTTP server](https://squidarth.com/networking/systems/rc/2018/05/28/using-raw-sockets.html), which means it's responsible for handling the three-way handshake and constructing packets. Memory is managed using [arenas](https://www.rfleury.com/p/enter-the-arena-talk).
 
-## Usage
+## Usage:
 
 Disable interference from the kernel TCP stack with: 
 `sudo iptables -A OUTPUT -p tcp --tcp-flags RST RST -j DROP`
